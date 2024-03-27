@@ -85,7 +85,7 @@ def main(training_args, hparams):
         tokenized_examples["labels"] = labels
         return tokenized_examples
 
-    train_set = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE)
+    train_set = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE, date="v2020-11-09")
     train_set = train_set.map(tokenize_function)
 
     dev_set_src = datasets.load_dataset("facebook/flores", "eng_Latn")['dev']
