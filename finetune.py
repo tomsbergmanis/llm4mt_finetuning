@@ -8,6 +8,10 @@ from datasets import load_metric
 import logging
 import transformers
 import sys
+import yaml
+
+import os
+access_token = os.environ['HF_TOKEN']
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +29,22 @@ def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="a
     if inference:
         if use_lora:
             model = AutoPeftModelForCausalLM.from_pretrained(
-                model_name, torch_dtype=torch.bfloat16, device_map=device_map
+                model_name, torch_dtype=torch.bfloat16,
+                device_map=device_map,
+                token=access_token
             )
         else:
             model = AutoModelForPreTraining.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
                 device_map=device_map,
+                token=access_token
             )
     else:
         model = AutoModelForPreTraining.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
+            token=access_token
         )
 
         if use_lora:
@@ -110,8 +118,9 @@ if __name__ == "__main__":
     transformers.utils.logging.set_verbosity(logging.INFO)
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
-
-    hparams = yaml.load('logging.yaml', Loader=yaml.FullLoader)
-    training_args = TrainingArguments(hparams["training_args"])
+    with open('lora.yaml') as hpf:
+        hparams = yaml.load(hpf, Loader=yaml.FullLoader)
+    print(hparams["training_args"])
+    training_args = TrainingArguments(**hparams["training_args"])
 
     main(training_args, hparams)
