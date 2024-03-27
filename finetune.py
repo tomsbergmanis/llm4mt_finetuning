@@ -85,7 +85,6 @@ def main(training_args, hparams):
         tokenized_examples["labels"] = labels
         return tokenized_examples
 
-    datasets.dataset_dict()
     train_set = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE)
     train_set = train_set.map(tokenize_function)
 
