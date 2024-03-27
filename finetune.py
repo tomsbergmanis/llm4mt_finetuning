@@ -93,7 +93,7 @@ def main(training_args, hparams):
 
     # Create a new dataset with 'source' and 'target' columns
     dev_set = dev_set_src.map(
-        lambda examples: {'translations': {SRC_LANG_CODE: examples['sentence'],
+        lambda examples: {'translation': {SRC_LANG_CODE: examples['sentence'],
                                            TRG_LANG_CODE: dev_set_trg[examples['id']-1]['sentence']}},
         remove_columns=['id', 'URL', 'domain', 'topic', 'has_image', 'has_hyperlink', 'sentence']
     )
