@@ -1,16 +1,16 @@
 import torch
+import yaml
 from transformers import AutoModelForPreTraining, AutoTokenizer, Trainer, TrainingArguments
 from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model
 from constants import *
 import datasets
 from datasets import load_metric
-from determined.transformers import DetCallback
-import determined
 import logging
 import transformers
 import sys
 
 logger = logging.getLogger(__name__)
+
 
 def get_tokenizer(model_name):
     tokenizer = AutoTokenizer.from_pretrained(
@@ -62,7 +62,7 @@ SRC_LANG, SRC_LANG_CODE = 'French', "fr"
 TRG_LANG, TRG_LANG_CODE = 'English', "en"
 
 
-def main(training_args, det_callback, hparams):
+def main(training_args, hparams):
     model_name = hparams["model"]
     model, tokenizer = get_model_and_tokenizer(model_name, hparams["lora"])
 
@@ -100,17 +100,10 @@ def main(training_args, det_callback, hparams):
         compute_metrics=compute_metrics,
     )
 
-    trainer.add_callback(det_callback)
-
     trainer.train()
 
 
 if __name__ == "__main__":
-    # Setup logging
-    logging.basicConfig(
-        format=determined.LOG_FORMAT, handlers=[logging.StreamHandler(sys.stdout)]
-    )
-
     transformers.utils.logging.set_verbosity_info()
     logger.setLevel(logging.INFO)
     datasets.utils.logging.set_verbosity(logging.INFO)
@@ -118,17 +111,7 @@ if __name__ == "__main__":
     transformers.utils.logging.enable_default_handler()
     transformers.utils.logging.enable_explicit_format()
 
-    info = determined.get_cluster_info()
-    hparams = info.trial.hparams
-    training_args = TrainingArguments(**hparams["training_args"])
-    if training_args.deepspeed:
-        distributed = determined.core.DistributedContext.from_deepspeed()
-    else:
-        distributed = determined.core.DistributedContext.from_torch_distributed()
+    hparams = yaml.load('logging.yaml', Loader=yaml.FullLoader)
+    training_args = TrainingArguments(hparams["training_args"])
 
-    with determined.core.init(distributed=distributed) as core_context:
-        det_callback = DetCallback(
-            core_context,
-            training_args,
-        )
-        main(training_args, det_callback, hparams)
+    main(training_args, hparams)
