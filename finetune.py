@@ -1,6 +1,6 @@
 import torch
 import yaml
-from transformers import AutoModelForPreTraining, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model
 from constants import *
 import datasets
@@ -35,14 +35,14 @@ def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="a
                 token=access_token
             )
         else:
-            model = AutoModelForPreTraining.from_pretrained(
+            model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
                 device_map=device_map,
                 token=access_token
             )
     else:
-        model = AutoModelForPreTraining.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
             token=access_token
