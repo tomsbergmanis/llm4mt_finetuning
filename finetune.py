@@ -67,8 +67,8 @@ def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="a
     return model, tokenizer
 
 
-SRC_LANG, SRC_LANG_CODE, SRC_LANG_CODE_2 = 'French', "fr", "fra_Latn"
-TRG_LANG, TRG_LANG_CODE, TRG_LANG_CODE_2 = 'English', "en", "eng_Latn"
+SRC_LANG, SRC_LANG_CODE, SRC_LANG_CODE_2 = 'English', "en", "eng_Latn"
+TRG_LANG, TRG_LANG_CODE, TRG_LANG_CODE_2 = 'French', "fr", "fra_Latn"
 
 
 def main(training_args, hparams):
