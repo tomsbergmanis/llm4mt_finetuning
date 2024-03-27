@@ -11,4 +11,4 @@ training_args:
   logging_steps: 100
   save_strategy: "steps"
   save_steps: 1000
-  learning_rate: 1e-5
+  learning_rate: 0.00005
