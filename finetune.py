@@ -17,15 +17,6 @@ access_token = os.environ['HF_TOKEN']
 logger = logging.getLogger(__name__)
 
 
-def get_tokenizer(model_name):
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_name,
-        padding_side="right",
-        truncation_side="right",
-    )
-    return tokenizer
-
-
 def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="auto", task_type=SEQ_2_SEQ_LM):
     if inference:
         if use_lora:
@@ -64,6 +55,8 @@ def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="a
         padding_side="right",
         truncation_side="right",
     )
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     return model, tokenizer
 
 
@@ -78,9 +71,9 @@ def main(training_args, hparams):
     def tokenize_function(examples):
         examples = examples['translation']
         tokenized_examples = tokenizer(examples[SRC_LANG_CODE], padding="max_length", truncation=True,
-                                       return_tensors="pt")
+                                       return_tensors="pt", max_length=128)
         with tokenizer.as_target_tokenizer():
-            labels = tokenizer(examples[TRG_LANG_CODE], padding="max_length", truncation=True, return_tensors="pt")[
+            labels = tokenizer(examples[TRG_LANG_CODE], padding="max_length", truncation=True,  max_length=128, return_tensors="pt")[
                 "input_ids"]
         tokenized_examples["labels"] = labels
         return tokenized_examples
@@ -112,7 +105,6 @@ def main(training_args, hparams):
 
         bleu_score = bleu_metric.compute(predictions=predictions, references=references)
         return {"bleu": bleu_score["score"]}
-
     trainer = Trainer(
         args=training_args,
         model=model,
