@@ -1,0 +1,134 @@
+import torch
+from transformers import AutoModelForPreTraining, AutoTokenizer, Trainer, TrainingArguments
+from peft import AutoPeftModelForCausalLM, LoraConfig, get_peft_model
+from constants import *
+import datasets
+from datasets import load_metric
+from determined.transformers import DetCallback
+import determined
+import logging
+import transformers
+import sys
+
+logger = logging.getLogger(__name__)
+
+def get_tokenizer(model_name):
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        padding_side="right",
+        truncation_side="right",
+    )
+    return tokenizer
+
+
+def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="auto", task_type=SEQ_2_SEQ_LM):
+    if inference:
+        if use_lora:
+            model = AutoPeftModelForCausalLM.from_pretrained(
+                model_name, torch_dtype=torch.bfloat16, device_map=device_map
+            )
+        else:
+            model = AutoModelForPreTraining.from_pretrained(
+                model_name,
+                torch_dtype=torch.bfloat16,
+                device_map=device_map,
+            )
+    else:
+        model = AutoModelForPreTraining.from_pretrained(
+            model_name,
+            torch_dtype=torch.bfloat16,
+        )
+
+        if use_lora:
+            peft_config = LoraConfig(
+                task_type=task_type,
+                inference_mode=False,
+                r=8,
+                lora_alpha=32,
+                lora_dropout=0.1,
+            )
+
+            model = get_peft_model(model, peft_config)
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        padding_side="right",
+        truncation_side="right",
+    )
+    return model, tokenizer
+
+
+SRC_LANG, SRC_LANG_CODE = 'French', "fr"
+TRG_LANG, TRG_LANG_CODE = 'English', "en"
+
+
+def main(training_args, det_callback, hparams):
+    model_name = hparams["model"]
+    model, tokenizer = get_model_and_tokenizer(model_name, hparams["lora"])
+
+    def tokenize_function(examples):
+        tokenized_examples = tokenizer(examples[SRC_LANG_CODE], padding="max_length", truncation=True,
+                                       return_tensors="pt")
+        with tokenizer.as_target_tokenizer():
+            labels = tokenizer(examples[TRG_LANG_CODE], padding="max_length", truncation=True, return_tensors="pt")[
+                "input_ids"]
+        tokenized_examples["labels"] = labels
+        return tokenized_examples
+
+    dataset = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE)
+    tokenized_datasets = dataset.map(tokenize_function)
+
+    bleu_metric = load_metric("bleu")
+
+    def compute_metrics(pred):
+        predictions = pred.predictions
+        label_ids = pred.label_ids
+
+        predictions = [tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=False) for g in
+                       predictions]
+        references = [[tokenizer.decode(l, skip_special_tokens=True, clean_up_tokenization_spaces=False)] for l in
+                      label_ids]
+
+        bleu_score = bleu_metric.compute(predictions=predictions, references=references)
+        return {"bleu": bleu_score["score"]}
+
+    trainer = Trainer(
+        args=training_args,
+        model=model,
+        train_dataset=tokenized_datasets["train"],
+        eval_dataset=dataset["valid"],
+        compute_metrics=compute_metrics,
+    )
+
+    trainer.add_callback(det_callback)
+
+    trainer.train()
+
+
+if __name__ == "__main__":
+    # Setup logging
+    logging.basicConfig(
+        format=determined.LOG_FORMAT, handlers=[logging.StreamHandler(sys.stdout)]
+    )
+
+    transformers.utils.logging.set_verbosity_info()
+    logger.setLevel(logging.INFO)
+    datasets.utils.logging.set_verbosity(logging.INFO)
+    transformers.utils.logging.set_verbosity(logging.INFO)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    info = determined.get_cluster_info()
+    hparams = info.trial.hparams
+    training_args = TrainingArguments(**hparams["training_args"])
+    if training_args.deepspeed:
+        distributed = determined.core.DistributedContext.from_deepspeed()
+    else:
+        distributed = determined.core.DistributedContext.from_torch_distributed()
+
+    with determined.core.init(distributed=distributed) as core_context:
+        det_callback = DetCallback(
+            core_context,
+            training_args,
+        )
+        main(training_args, det_callback, hparams)

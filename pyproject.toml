@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pythonproject"
+version = "0.1.0"
+description = ""
+authors = ["toms.bergmanis <toms.bergmanis@tilde.lv>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+transformers = '4.39.1'
+peft = '0.10.0'
+torch = '2.2.1'
+datasets = '2.18.0'
+determined = '0.29.1'
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
