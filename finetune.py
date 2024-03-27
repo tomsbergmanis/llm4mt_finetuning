@@ -11,6 +11,7 @@ import sys
 import yaml
 
 import os
+
 access_token = os.environ['HF_TOKEN']
 
 logger = logging.getLogger(__name__)
@@ -66,8 +67,8 @@ def get_model_and_tokenizer(model_name, use_lora, inference=False, device_map="a
     return model, tokenizer
 
 
-SRC_LANG, SRC_LANG_CODE = 'French', "fr"
-TRG_LANG, TRG_LANG_CODE = 'English', "en"
+SRC_LANG, SRC_LANG_CODE, SRC_LANG_CODE_2 = 'French', "fr", "fra_Latn"
+TRG_LANG, TRG_LANG_CODE, TRG_LANG_CODE_2 = 'English', "en", "eng_Latn"
 
 
 def main(training_args, hparams):
@@ -75,6 +76,7 @@ def main(training_args, hparams):
     model, tokenizer = get_model_and_tokenizer(model_name, hparams["lora"])
 
     def tokenize_function(examples):
+        examples = examples['translation']
         tokenized_examples = tokenizer(examples[SRC_LANG_CODE], padding="max_length", truncation=True,
                                        return_tensors="pt")
         with tokenizer.as_target_tokenizer():
@@ -83,8 +85,20 @@ def main(training_args, hparams):
         tokenized_examples["labels"] = labels
         return tokenized_examples
 
-    dataset = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE)
-    tokenized_datasets = dataset.map(tokenize_function)
+    datasets.dataset_dict()
+    train_set = datasets.load_dataset("tatoeba", lang1=SRC_LANG_CODE, lang2=TRG_LANG_CODE)
+    train_set = train_set.map(tokenize_function)
+
+    dev_set_src = datasets.load_dataset("facebook/flores", "eng_Latn")['dev']
+    dev_set_trg = datasets.load_dataset("facebook/flores", "fra_Latn")['dev']
+
+    # Create a new dataset with 'source' and 'target' columns
+    dev_set = dev_set_src.map(
+        lambda examples: {'translations': {SRC_LANG_CODE: examples['sentence'],
+                                           TRG_LANG_CODE: dev_set_trg['sentence'][examples['id']]}},
+        remove_columns=['id', 'URL', 'domain', 'topic', 'has_image', 'has_hyperlink', 'sentence']
+    )
+    dev_set = dev_set.map(tokenize_function)
 
     bleu_metric = load_metric("bleu")
 
@@ -103,8 +117,8 @@ def main(training_args, hparams):
     trainer = Trainer(
         args=training_args,
         model=model,
-        train_dataset=tokenized_datasets["train"],
-        eval_dataset=dataset["valid"],
+        train_dataset=train_set["train"],
+        eval_dataset=dev_set,
         compute_metrics=compute_metrics,
     )
 
